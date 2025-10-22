@@ -7,8 +7,8 @@ from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import CommandStart
 from aiogram.enums import ParseMode
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = os.getenv("GROUP_ID")          # e.g. -1001234567890
+BOT_TOKEN = os.getenv("8145331081:AAEg_ru70no470k29WLiKUvtcOXwQRrifdY")
+GROUP_ID = os.getenv("-1003027286018")          # e.g. -1001234567890
 
 ENFORCE_ALLOWED_PHONES = os.getenv("ENFORCE_ALLOWED_PHONES", "0") == "1"
 ENFORCE_ALLOWED_USERS  = os.getenv("ENFORCE_ALLOWED_USERS",  "0") == "1"
