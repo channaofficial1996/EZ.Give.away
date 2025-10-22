@@ -26,7 +26,12 @@ REWARD_LABEL = os.getenv("REWARD_LABEL", "អាវយឺត")
 if not all([BOT_TOKEN, GROUP_ID]):
     raise RuntimeError("Missing one of: BOT_TOKEN / GROUP_ID")
 
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+from aiogram.client.default import DefaultBotProperties
+
+bot = Bot(
+    token=BOT_TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
 dp = Dispatcher()
 
 # -------- Local store (anti-dup) --------
