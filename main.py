@@ -7,15 +7,20 @@ from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
 from aiogram.filters import CommandStart
 from aiogram.enums import ParseMode
 
-BOT_TOKEN = os.getenv("8145331081:AAEg_ru70no470k29WLiKUvtcOXwQRrifdY")
-GROUP_ID = os.getenv("-1003027286018")          # e.g. -1001234567890
+# -------- ENV --------
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+GROUP_ID  = os.getenv("GROUP_ID")          # e.g. -1003027286018
 
-ENFORCE_ALLOWED_PHONES = os.getenv("ENFORCE_ALLOWED_PHONES", "0") == "1"
+# Optional: Admins (CSV of Telegram user IDs) to use /groupid
+ADMIN_IDS = set(u.strip() for u in os.getenv("ADMIN_IDS", "").split(",") if u.strip())
+
+# Anti-dup + allow-lists
 ENFORCE_ALLOWED_USERS  = os.getenv("ENFORCE_ALLOWED_USERS",  "0") == "1"
-
-ALLOWED_PHONES = set(p.strip() for p in os.getenv("ALLOWED_PHONES", "").split(",") if p.strip())
+ENFORCE_ALLOWED_PHONES = os.getenv("ENFORCE_ALLOWED_PHONES", "0") == "1"
 ALLOWED_USERS  = set(u.strip() for u in os.getenv("ALLOWED_USERS",  "").split(",") if u.strip())
+ALLOWED_PHONES = set(p.strip() for p in os.getenv("ALLOWED_PHONES", "").split(",") if p.strip())
 
+# Khmer reward label
 REWARD_LABEL = os.getenv("REWARD_LABEL", "អាវយឺត")
 
 if not all([BOT_TOKEN, GROUP_ID]):
@@ -24,6 +29,7 @@ if not all([BOT_TOKEN, GROUP_ID]):
 bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 
+# -------- Local store (anti-dup) --------
 DATA_DIR = Path(__file__).parent / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 STATE_PATH = DATA_DIR / "state.json"
@@ -45,65 +51,68 @@ def save_state(state):
 STATE = load_state()
 
 def normalize_kh_phone(raw: str) -> str:
+    """Normalize to E.164 KH (+855...). Accepts +855, leading 0, or digits."""
     p = re.sub(r"[ \-]", "", raw or "")
-    if p.startswith("+"):
-        digits = "+" + re.sub(r"[^\d]", "", p[1:])
-    else:
-        digits = re.sub(r"[^\d]", "", p)
+    digits = "+" + re.sub(r"[^\d]", "", p[1:]) if p.startswith("+") else re.sub(r"[^\d]", "", p)
     if digits.startswith("+855"):
         return digits
     if digits.startswith("0") and len(digits) >= 9:
         return "+855" + digits[1:]
-    if digits.isdigit():
-        if 8 <= len(digits) <= 12:
-            return "+855" + digits if not digits.startswith("0") else "+855" + digits[1:]
+    if digits.isdigit() and 8 <= len(digits) <= 12:
+        return "+855" + (digits if not digits.startswith("0") else digits[1:])
     return digits
+
+def user_exists(uid: int) -> bool:
+    return str(uid) in set(STATE.get("user_index", []))
 
 def phone_exists(phone_e164: str) -> bool:
     return phone_e164 in set(STATE.get("phone_index", []))
 
-def user_exists(user_id: int) -> bool:
-    return str(user_id) in set(STATE.get("user_index", []))
+def add_user(uid: int):
+    s = set(STATE.get("user_index", [])); s.add(str(uid))
+    STATE["user_index"] = sorted(s); save_state(STATE)
 
 def add_phone(phone_e164: str):
-    s = set(STATE.get("phone_index", []))
-    s.add(phone_e164)
-    STATE["phone_index"] = sorted(s)
-    save_state(STATE)
+    s = set(STATE.get("phone_index", [])); s.add(phone_e164)
+    STATE["phone_index"] = sorted(s); save_state(STATE)
 
-def add_user(user_id: int):
-    s = set(STATE.get("user_index", []))
-    s.add(str(user_id))
-    STATE["user_index"] = sorted(s)
-    save_state(STATE)
+def is_user_allowed(uid: int) -> bool:
+    if not ENFORCE_ALLOWED_USERS: return True
+    return str(uid) in ALLOWED_USERS and len(ALLOWED_USERS) > 0
 
 def is_phone_allowed(phone_e164: str) -> bool:
-    if not ENFORCE_ALLOWED_PHONES:
-        return True
-    if len(ALLOWED_PHONES) == 0:
-        return False
-    return phone_e164 in ALLOWED_PHONES
+    if not ENFORCE_ALLOWED_PHONES: return True
+    return phone_e164 in ALLOWED_PHONES and len(ALLOWED_PHONES) > 0
 
-def is_user_allowed(user_id: int) -> bool:
-    if not ENFORCE_ALLOWED_USERS:
-        return True
-    if len(ALLOWED_USERS) == 0:
-        return False
-    return str(user_id) in ALLOWED_USERS
-
+# -------- UI --------
 main_kb = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="📝 ចុះឈ្មោះ"), KeyboardButton(text="👔 ទាក់ទងភ្នាក់ងារ")]],
     resize_keyboard=True
 )
-user_state = {}
+user_state = {}  # uid -> {"step": "name"/"phone", "src": "Register", "name": str}
 
+# -------- Commands --------
 @dp.message(CommandStart())
 async def start_cmd(msg: Message):
     await msg.answer(
-        "សួស្ដី! នេះគឺ <b>LaLa Bot</b> (Group-only Report) សម្រាប់ចុះឈ្មោះយកអាវយឺត 👕\n"
+        "សួស្ដី! នេះគឺ <b>LaLa Bot</b> (Group-only) សម្រាប់ចុះឈ្មោះយកអាវយឺត 👕\n"
         "សូមជ្រើសរើសពីម៉ឺនុយខាងក្រោម។",
         reply_markup=main_kb
     )
+
+@dp.message(F.text == "/myid")
+async def myid_cmd(msg: Message):
+    uid = msg.from_user.id
+    await msg.answer(f"🆔 Your Telegram User ID: <code>{uid}</code>", parse_mode=ParseMode.HTML)
+
+@dp.message(F.text == "/groupid")
+async def groupid_cmd(msg: Message):
+    uid = str(msg.from_user.id)
+    if ADMIN_IDS and uid not in ADMIN_IDS:
+        await msg.answer("⛔️ Only admins can use /groupid")
+        return
+    chat_id = msg.chat.id
+    await msg.answer(f"💬 This chat id: <code>{chat_id}</code>", parse_mode=ParseMode.HTML)
 
 @dp.message(F.text == "👔 ទាក់ទងភ្នាក់ងារ")
 async def contact_agent(msg: Message):
@@ -124,6 +133,7 @@ async def collect_flow(msg: Message):
     uid = msg.from_user.id
     if uid not in user_state:
         return
+
     st = user_state[uid]
     step = st.get("step")
 
@@ -146,45 +156,32 @@ async def collect_flow(msg: Message):
 
         phone_e164 = normalize_kh_phone(raw)
 
+        # 1) Duplicate checks
         if user_exists(uid):
-            await msg.answer(
-                "⛔️ <b>Account Telegram នេះ</b> បានចុះឈ្មោះរួចហើយ។\n"
-                "មិនអាចទទួលបានអាវម្តងទៀតបានទេ។",
-                parse_mode=ParseMode.HTML,
-                reply_markup=main_kb
-            )
-            user_state.pop(uid, None)
-            return
+            await msg.answer("⛔️ <b>Account Telegram នេះ</b> បានចុះឈ្មោះរួចហើយ។", parse_mode=ParseMode.HTML, reply_markup=main_kb)
+            user_state.pop(uid, None); return
+        if phone_exists(phone_e164):
+            await msg.answer("⚠️ លេខទូរសព្ទនេះបានចុះឈ្មោះរួចហើយ។", parse_mode=ParseMode.HTML, reply_markup=main_kb)
+            user_state.pop(uid, None); return
 
+        # 2) Allow-lists (optional)
         if not is_user_allowed(uid):
             await msg.answer("⛔️ Account Telegram នេះមិនមានក្នុងបញ្ជីអនុញ្ញាតទេ។", reply_markup=main_kb)
-            user_state.pop(uid, None)
-            return
-
+            user_state.pop(uid, None); return
         if not is_phone_allowed(phone_e164):
             await msg.answer("⛔️ លេខទូរសព្ទនេះមិនមានក្នុងបញ្ជីអនុញ្ញាតទេ។", reply_markup=main_kb)
-            user_state.pop(uid, None)
-            return
+            user_state.pop(uid, None); return
 
-        if phone_exists(phone_e164):
-            await msg.answer(
-                "⚠️ លេខទូរសព្ទនេះបានចុះឈ្មោះរួចហើយ។\n"
-                "មិនអាចទទួលបានអាវម្តងទៀតបានទេ។",
-                parse_mode=ParseMode.HTML,
-                reply_markup=main_kb
-            )
-            user_state.pop(uid, None)
-            return
-
-        full_name = st.get("name", "")
-        src = st.get("src", "Register")
-
+        # 3) Save indices
         add_user(uid)
         add_phone(phone_e164)
 
+        full_name = st.get("name", "")
         member_status = "NEW"
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        text = (
+
+        # 4) Send report to group
+        report = (
             "🆕 <b>ការចុះឈ្មោះយកអាវយឺត</b>\n"
             f"📅 Date Time: <b>{ts}</b>\n"
             f"🆔 User ID: <code>{uid}</code>\n"
@@ -194,10 +191,11 @@ async def collect_flow(msg: Message):
             f"🟢 Member: <b>{member_status}</b>"
         )
         try:
-            await bot.send_message(chat_id=int(GROUP_ID), text=text)
+            await bot.send_message(chat_id=int(GROUP_ID), text=report)
         except Exception as e:
-            await msg.answer(f"⚠️ ព័ត៌មាន: មិនអាចផ្ញើទៅ Group បាន ({e})។")
+            await msg.answer(f"⚠️ មិនអាចផ្ញើទៅ Group បាន: {e}")
 
+        # 5) Confirm to user
         await msg.answer(
             "🎉 <b>បញ្ចប់ការចុះឈ្មោះ</b>\n\n"
             f"👤 ឈ្មោះ: <b>{full_name}</b>\n"
@@ -207,7 +205,6 @@ async def collect_flow(msg: Message):
             parse_mode=ParseMode.HTML,
             reply_markup=main_kb
         )
-
         user_state.pop(uid, None)
         return
 
