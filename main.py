@@ -10,9 +10,9 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # ========== ENV ==========
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID = os.getenv("GROUP_ID")          # e.g. -1001234567890
-SHEET_ID = os.getenv("SHEET_ID")          # Google Sheet ID
+BOT_TOKEN = os.getenv("8145331081:AAEg_ru70no470k29WLiKUvtcOXwQRrifdY")
+GROUP_ID = os.getenv("-1003027286018")          # e.g. -1001234567890
+SHEET_ID = os.getenv("1Bo20Yfb4mmuwrskqJv1mDwIiS6dem0SpekoQRqois9I")          # Google Sheet ID
 GSERVICE_JSON = os.getenv("GSERVICE_JSON")# Entire service account JSON as a single-line string
 
 # Phone allow enforcement (only phones present in AllowedPhones may register)
