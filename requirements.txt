@@ -1,4 +1,2 @@
 aiogram>=3.4.0
-gspread>=6.0.0
-google-auth>=2.35.0
 python-dotenv>=1.0.1
