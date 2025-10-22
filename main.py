@@ -1,9 +1,13 @@
+# main.py  — LaLa (Group-only) FULL
 import os, json, asyncio, re, logging
 from datetime import datetime
 from pathlib import Path
 
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, FSInputFile
+from aiogram.types import (
+    Message, KeyboardButton, ReplyKeyboardMarkup,
+    InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
+)
 from aiogram.filters import CommandStart
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
@@ -14,16 +18,20 @@ log = logging.getLogger("lala")
 
 # ---------- ENV ----------
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_ID  = os.getenv("GROUP_ID")          # e.g. -1003027286018
+GROUP_ID  = os.getenv("GROUP_ID")                  # e.g. -1003027286018
+REWARD_LABEL = os.getenv("REWARD_LABEL", "អាវយឺត")
 
+# Agent contact (inline button/link)
+AGENT_URL = os.getenv("AGENT_URL", "https://t.me/your_agent")
+
+# Admins allowed to use /groupid
 ADMIN_IDS = set(u.strip() for u in os.getenv("ADMIN_IDS", "").split(",") if u.strip())
 
+# Anti-dup + allow-lists
 ENFORCE_ALLOWED_USERS  = os.getenv("ENFORCE_ALLOWED_USERS",  "0") == "1"
 ENFORCE_ALLOWED_PHONES = os.getenv("ENFORCE_ALLOWED_PHONES", "0") == "1"
 ALLOWED_USERS  = set(u.strip() for u in os.getenv("ALLOWED_USERS",  "").split(",") if u.strip())
 ALLOWED_PHONES = set(p.strip() for p in os.getenv("ALLOWED_PHONES", "").split(",") if p.strip())
-
-REWARD_LABEL = os.getenv("REWARD_LABEL", "អាវយឺត")
 
 if not all([BOT_TOKEN, GROUP_ID]):
     raise RuntimeError("Missing one of: BOT_TOKEN / GROUP_ID")
@@ -88,6 +96,9 @@ main_kb = ReplyKeyboardMarkup(
     keyboard=[[KeyboardButton(text="📝 ចុះឈ្មោះ"), KeyboardButton(text="👔 ទាក់ទងភ្នាក់ងារ")]],
     resize_keyboard=True
 )
+agent_inline_kb = InlineKeyboardMarkup(
+    inline_keyboard=[[InlineKeyboardButton(text="👔 ទាក់ទងភ្នាក់ងារ", url=AGENT_URL)]]
+)
 user_state = {}  # uid -> {"step": "name"/"phone", "name": str}
 
 # ---------- Commands ----------
@@ -111,7 +122,7 @@ async def groupid_cmd(msg: Message):
 
 @dp.message(F.text == "👔 ទាក់ទងភ្នាក់ងារ")
 async def contact_agent(msg: Message):
-    await msg.answer("👔 ទាក់ទងភ្នាក់ងារ:\n• Agent A: @your_agent | +855 xx xxx xxx")
+    await msg.answer("👔 ចុចប៊ូតុងខាងក្រោមដើម្បីទាក់ទងភ្នាក់ងារ:", reply_markup=agent_inline_kb)
 
 @dp.message(F.text == "📝 ចុះឈ្មោះ")
 async def register_start(msg: Message):
@@ -140,14 +151,14 @@ async def collect_flow(msg: Message):
     if step == "phone":
         try:
             raw = (msg.text or "").strip()
-            logging.info(f"[phone] raw={raw!r} uid={uid}")
+            log.info(f"[phone] raw={raw!r} uid={uid}")
             raw_digits = re.sub(r"[^\d+]", "", raw)
             if len(re.sub(r"[^\d]", "", raw_digits)) < 8:
                 await msg.answer("លេខទូរសព្ទមិនត្រឹមត្រូវ ☎️ សូមវាយឡើងវិញ (យ៉ាងហោចណាស់ 8 តួលេខ)។")
                 return
 
             phone_e164 = normalize_kh_phone(raw)
-            logging.info(f"[phone] normalized={phone_e164} uid={uid}")
+            log.info(f"[phone] normalized={phone_e164} uid={uid}")
 
             # duplicate checks
             if user_exists(uid):
@@ -168,14 +179,17 @@ async def collect_flow(msg: Message):
             # save indices
             add_user(uid); add_phone(phone_e164)
 
-            # group report
             full_name = st.get("name", "")
+            username = f"@{msg.from_user.username}" if msg.from_user and msg.from_user.username else "(no username)"
             member_status = "NEW"
             ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # group report
             report = (
                 "🆕 <b>ការចុះឈ្មោះយកអាវយឺត</b>\n"
                 f"📅 Date Time: <b>{ts}</b>\n"
                 f"🆔 User ID: <code>{uid}</code>\n"
+                f"🔗 Username: <b>{username}</b>\n"
                 f"👤 Full Name: <b>{full_name}</b>\n"
                 f"📱 Phone: <b>{phone_e164}</b>\n"
                 f"🎁 រង្វាន់: <b>{REWARD_LABEL}</b>\n"
@@ -183,9 +197,9 @@ async def collect_flow(msg: Message):
             )
             try:
                 await bot.send_message(chat_id=int(GROUP_ID), text=report)
-                logging.info(f"[group] sent ok to {GROUP_ID}")
+                log.info(f"[group] sent ok to {GROUP_ID}")
             except Exception as e:
-                logging.error(f"[group] send failed: {e}")
+                log.error(f"[group] send failed: {e}")
                 await msg.answer(f"⚠️ ព័ត៌មាន: មិនអាចផ្ញើទៅ Group បាន ({e})។")
 
             # congratulation + voucher
@@ -193,11 +207,12 @@ async def collect_flow(msg: Message):
                 "🎉 <b>អបអរសាទរ!</b>\n"
                 "បងទទួលបាន <b>អាវយឺត ១</b> 👕\n"
                 "សូមបង្ហាញ <b>រូបភាពខាងក្រោម</b> ទៅក្រុមការងារ ដើម្បីទទួលអាវ។\n\n"
+                f"🔗 Username: <b>{username}</b>\n"
                 f"👤 ឈ្មោះ: <b>{full_name}</b>\n"
                 f"📱 លេខ: <b>{phone_e164}</b>\n"
                 f"🎁 រង្វាន់: <b>{REWARD_LABEL}</b>"
             )
-            voucher_path = DATA_DIR / "voucher.jpg"  # ឬ voucher.png
+            voucher_path = DATA_DIR / "voucher.jpg"   # place your image here
             try:
                 if voucher_path.exists():
                     await bot.send_photo(chat_id=msg.chat.id, photo=FSInputFile(voucher_path), caption=confirm_text)
@@ -210,7 +225,7 @@ async def collect_flow(msg: Message):
             return
 
         except Exception as e:
-            logging.exception(f"[phone] unexpected error: {e}")
+            log.exception(f"[phone] unexpected error: {e}")
             await msg.answer("⚠️ មានកំហុសមួយកើតឡើង សូមវាយលេខទូរសព្ទម្តងទៀត។")
             return
 
