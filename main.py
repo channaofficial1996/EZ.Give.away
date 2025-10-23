@@ -23,7 +23,7 @@ GROUP_ID  = os.getenv("GROUP_ID")                  # e.g. -1003027286018
 REWARD_LABEL = os.getenv("REWARD_LABEL", "អាវយឺត")
 
 # Agent contact (inline button/link)
-AGENT_URL = os.getenv("AGENT_URL", "https://t.me/your_agent")
+AGENT_URL = os.getenv("AGENT_URL", "https://t.me/bestservicebj88")
 
 # Admins allowed to use /groupid
 ADMIN_IDS = set(u.strip() for u in os.getenv("ADMIN_IDS", "").split(",") if u.strip())
