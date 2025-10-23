@@ -1,4 +1,4 @@
-# main.py  — LaLa (Group-only) FULL
+# main.py  — LaLa (Group-only) FULL + Group Photo + Asia/Bangkok time
 import os, json, asyncio, re, logging
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +11,7 @@ from aiogram.types import (
 from aiogram.filters import CommandStart
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from zoneinfo import ZoneInfo  # ★ timezone
 
 # ---------- Logging ----------
 logging.basicConfig(level=logging.INFO)
@@ -182,12 +183,12 @@ async def collect_flow(msg: Message):
             full_name = st.get("name", "")
             username = f"@{msg.from_user.username}" if msg.from_user and msg.from_user.username else "(no username)"
             member_status = "NEW"
-            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ts = datetime.now(ZoneInfo("Asia/Bangkok")).strftime("%Y-%m-%d %H:%M:%S")  # ★ UTC+7
 
-            # group report
+            # group report (try photo first; fallback to text)
             report = (
                 "🆕 <b>ការចុះឈ្មោះយកអាវយឺត</b>\n"
-                f"📅 Date Time: <b>{ts}</b>\n"
+                f"📅 Date Time (UTC+7): <b>{ts}</b>\n"
                 f"🆔 User ID: <code>{uid}</code>\n"
                 f"🔗 Username: <b>{username}</b>\n"
                 f"👤 Full Name: <b>{full_name}</b>\n"
@@ -196,13 +197,22 @@ async def collect_flow(msg: Message):
                 f"🟢 Member: <b>{member_status}</b>"
             )
             try:
-                await bot.send_message(chat_id=int(GROUP_ID), text=report)
-                log.info(f"[group] sent ok to {GROUP_ID}")
+                voucher_path = DATA_DIR / "voucher.jpg"   # រូបអាវសម្រាប់ group
+                if voucher_path.exists():
+                    await bot.send_photo(
+                        chat_id=int(GROUP_ID),
+                        photo=FSInputFile(voucher_path),
+                        caption=report
+                    )
+                    log.info(f"[group] photo+caption sent to {GROUP_ID}")
+                else:
+                    await bot.send_message(chat_id=int(GROUP_ID), text=report)
+                    log.info(f"[group] text report sent to {GROUP_ID} (no voucher.jpg)")
             except Exception as e:
                 log.error(f"[group] send failed: {e}")
                 await msg.answer(f"⚠️ ព័ត៌មាន: មិនអាចផ្ញើទៅ Group បាន ({e})។")
 
-            # congratulation + voucher
+            # congratulation + voucher (DM to user)
             confirm_text = (
                 "🎉 <b>អបអរសាទរ!</b>\n"
                 "បងទទួលបាន <b>អាវយឺត ១</b> 👕\n"
@@ -212,10 +222,10 @@ async def collect_flow(msg: Message):
                 f"📱 លេខ: <b>{phone_e164}</b>\n"
                 f"🎁 រង្វាន់: <b>{REWARD_LABEL}</b>"
             )
-            voucher_path = DATA_DIR / "voucher.jpg"   # place your image here
             try:
-                if voucher_path.exists():
-                    await bot.send_photo(chat_id=msg.chat.id, photo=FSInputFile(voucher_path), caption=confirm_text)
+                user_voucher = DATA_DIR / "voucher.jpg"
+                if user_voucher.exists():
+                    await bot.send_photo(chat_id=msg.chat.id, photo=FSInputFile(user_voucher), caption=confirm_text)
                 else:
                     await msg.answer(confirm_text, reply_markup=main_kb)
             except Exception:
