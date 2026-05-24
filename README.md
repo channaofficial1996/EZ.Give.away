@@ -22,6 +22,18 @@ python main.py
 ```
 
 Deploy on Railway
-- Upload this folder or connect a repo
-- Set env: BOT_TOKEN, GROUP_ID (+ optional ENFORCE/ALLOWED vars)
-- Procfile is provided (worker).
+1. Connect your GitHub repo or upload this folder to Railway
+2. Go to your Railway project → Variables tab
+3. Add environment variables:
+   - `BOT_TOKEN` - Your Telegram bot token from BotFather
+   - `GROUP_ID` - Your group chat ID (negative number, e.g., -1003027286018)
+   - (Optional) `REWARD_LABEL` - Label for the reward (default: "អាវយឺត")
+   - (Optional) `AGENT_URL` - Agent contact link
+   - (Optional) `ENFORCE_ALLOWED_USERS`, `ALLOWED_USERS`, etc.
+4. Railway will automatically detect the Procfile and deploy
+5. View logs: Railway Dashboard → Your Service → Logs
+
+Troubleshooting
+- **Bot not responding**: Check that BOT_TOKEN and GROUP_ID are set correctly
+- **Registration not saved**: Ensure `/data` directory has write permissions
+- **Group not receiving reports**: Verify GROUP_ID format (must be negative for groups)

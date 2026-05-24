@@ -1,5 +1,5 @@
 # main.py  — LaLa (Group-only) FULL + Group Photo + Asia/Bangkok time
-import os, json, asyncio, re, logging
+import os, json, asyncio, re, logging, signal
 from datetime import datetime
 from pathlib import Path
 
@@ -241,7 +241,38 @@ async def collect_flow(msg: Message):
 
 async def main():
     print("🚀 LaLa bot (group-only) running — anti-dup by user & phone")
-    await dp.start_polling(bot)
+    try:
+        # Test bot connection
+        me = await bot.get_me()
+        log.info(f"✅ Bot connected: @{me.username} (ID: {me.id})")
+    except Exception as e:
+        log.error(f"❌ Failed to connect to Telegram: {e}")
+        raise
+
+    # Setup graceful shutdown
+    loop = asyncio.get_event_loop()
+    
+    def handle_signal(signum, frame):
+        log.info(f"📍 Signal {signum} received - initiating graceful shutdown...")
+        # Request dispatcher shutdown
+        asyncio.create_task(dp.feed_update(None))
+    
+    # Register signal handlers for graceful shutdown
+    loop.add_signal_handler(signal.SIGTERM, handle_signal, signal.SIGTERM, None)
+    loop.add_signal_handler(signal.SIGINT, handle_signal, signal.SIGINT, None)
+    
+    try:
+        await dp.start_polling(bot)
+    except asyncio.CancelledError:
+        log.info("📍 Polling cancelled")
+    finally:
+        log.info("🛑 Shutting down bot...")
+        save_state(STATE)  # Save state on shutdown
+        await bot.session.close()
+        log.info("✅ Bot shutdown complete")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        log.info("⚠️ Bot interrupted by user")
